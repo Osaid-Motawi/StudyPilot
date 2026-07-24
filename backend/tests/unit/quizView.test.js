@@ -7,6 +7,7 @@ describe('buildTakingView (answer-hiding anti-cheat)', () => {
     id: 'qz1',
     title: 'Photosynthesis',
     sourceType: 'pasted',
+    questionType: 'mcq',
     createdAt: new Date('2026-07-23T10:00:00Z'),
     questions: [
       {
@@ -18,7 +19,7 @@ describe('buildTakingView (answer-hiding anti-cheat)', () => {
       },
       {
         id: 'q2',
-        type: 'short_answer',
+        type: 'fill_blank',
         prompt: 'What gas is released?',
         expectedAnswer: 'Oxygen',
       },
@@ -33,7 +34,7 @@ describe('buildTakingView (answer-hiding anti-cheat)', () => {
     expect(mcq).not.toHaveProperty('correctOptionIndex');
   });
 
-  test('short-answer omits expectedAnswer', () => {
+  test('fill_blank omits expectedAnswer', () => {
     const sa = view.questions.find((q) => q.id === 'q2');
     expect(sa).not.toHaveProperty('expectedAnswer');
     expect(sa).not.toHaveProperty('options');

@@ -11,11 +11,13 @@ const { createApp } = require('../../src/app');
 const NOTES =
   'The water cycle describes how water evaporates, condenses into clouds, and returns as precipitation.';
 
+// 002: single-type quiz (mcq).
 const AGENT_QUIZ = {
   title: 'Water Cycle',
+  question_type: 'mcq',
   questions: [
     { type: 'mcq', prompt: 'First step?', options: ['Evaporation', 'Rain'], correct_option_index: 0 },
-    { type: 'short_answer', prompt: 'Define condensation.', expected_answer: 'Vapor to liquid' },
+    { type: 'mcq', prompt: 'What forms clouds?', options: ['Condensation', 'Erosion'], correct_option_index: 0 },
   ],
 };
 
@@ -26,7 +28,6 @@ beforeEach(() => {
   firestoreClient.setAuth({ verifyIdToken: async (token) => ({ uid: token }) });
   app = createApp();
   agentClient.generateQuiz.mockResolvedValue(AGENT_QUIZ);
-  agentClient.gradeShortAnswer.mockResolvedValue({ isCorrect: true, rationale: 'ok' });
 });
 
 describe('FR-002: cross-user isolation', () => {

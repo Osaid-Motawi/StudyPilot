@@ -11,11 +11,13 @@ const { createApp } = require('../../src/app');
 const NOTES =
   'Cellular respiration breaks down glucose to release energy stored as ATP in the mitochondria of cells.';
 
+// 002: single-type quiz (mcq).
 const AGENT_QUIZ = {
   title: 'Respiration',
+  question_type: 'mcq',
   questions: [
     { type: 'mcq', prompt: 'Where?', options: ['Mitochondria', 'Nucleus'], correct_option_index: 0 },
-    { type: 'short_answer', prompt: 'Product?', expected_answer: 'ATP' },
+    { type: 'mcq', prompt: 'Product?', options: ['ATP', 'DNA'], correct_option_index: 0 },
   ],
 };
 
@@ -25,7 +27,6 @@ beforeEach(() => {
   firestoreClient.setAuth({ verifyIdToken: async (token) => ({ uid: token }) });
   app = createApp();
   agentClient.generateQuiz.mockResolvedValue(AGENT_QUIZ);
-  agentClient.gradeShortAnswer.mockResolvedValue({ isCorrect: false, rationale: 'nope' });
 });
 
 const auth = (req) => req.set('Authorization', 'Bearer userA');
@@ -36,7 +37,7 @@ async function createQuiz() {
 }
 async function attempt(quizId, mcqIndex) {
   return auth(request(app).post(`/api/quizzes/${quizId}/attempts`)).send({
-    answers: [{ questionId: 'q1', mcqOptionIndex: mcqIndex }, { questionId: 'q2', text: '' }],
+    answers: [{ questionId: 'q1', mcqOptionIndex: mcqIndex }],
   });
 }
 

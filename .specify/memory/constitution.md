@@ -1,14 +1,16 @@
 <!--
 Sync Impact Report
-- Version change: 1.0.0 → 1.1.0
-- Bump type: MINOR (Principle II scope materially expanded; no removals or
-  backward-incompatible redefinitions)
+- Version change: 1.1.0 → 1.2.0
+- Bump type: MINOR (Principle II scope materially expanded again; no removals or
+  backward-incompatible redefinitions — prior responsibilities are preserved)
 - Modified principles:
   - II. Agent Responsibility Boundary (NON-NEGOTIABLE): expanded the agent's scope
-    from "analyzing study notes and generating quiz questions" to also include
-    "grading short-answer responses using AI-based semantic evaluation"; clarified
-    that the backend still orchestrates, persists, and deterministically scores
-    multiple-choice questions.
+    to also include: generating multiple question types (multiple-choice,
+    fill-in-the-blank, essay/free-response, matching); essay/free-response grading
+    with a numeric score plus feedback; general open-ended AI chat; and image/file
+    content analysis (vision) for both conversational Q&A and quiz generation.
+    Clarified that the backend deterministically scores BOTH multiple-choice and
+    matching, and persists chat conversations in addition to quizzes/attempts.
 - Added sections: None
 - Removed sections: None
 - Templates requiring updates:
@@ -19,13 +21,18 @@ Sync Impact Report
     testing / separation discipline)
   - .claude/skills/speckit-*/SKILL.md ✅ consistent (agent-agnostic; hyphen naming)
 - Downstream artifacts aligned:
-  - specs/001-ai-quiz-generator/spec.md ✅ already consistent (FR-009, FR-017,
-    FR-017a and Clarifications match the expanded Principle II)
+  - specs/002-ai-study-companion/spec.md ✅ consistent (FR-006/010/011/012/013,
+    FR-021..028 and the four-part scope match the expanded Principle II)
+  - specs/001-ai-quiz-generator/spec.md ✅ still consistent (its behavior is a
+    subset of the broadened scope)
 - Follow-up TODOs: None
 
-Prior report (v1.0.0 initial adoption): all template placeholders resolved; five
-core principles, Technology Stack & Constraints, Development Workflow & Quality
-Gates, and Governance sections created.
+Prior reports:
+- v1.1.0: added short-answer AI semantic grading to the agent's scope; backend
+  scores multiple-choice deterministically.
+- v1.0.0 (initial adoption): all template placeholders resolved; five core
+  principles, Technology Stack & Constraints, Development Workflow & Quality Gates,
+  and Governance sections created.
 -->
 
 # StudyPilot Constitution
@@ -48,25 +55,38 @@ rules from becoming entangled as the project grows.
 
 ### II. Agent Responsibility Boundary (NON-NEGOTIABLE)
 
-The Fetch AI agent (uAgents + ASI:One) is responsible for the project's AI logic,
-scoped to exactly three tasks: **analyzing study notes**, **generating quiz
-questions (multiple-choice and short-answer)**, and **grading short-answer
-responses using AI-based semantic evaluation**. All of this AI logic MUST live in
-the agent and MUST NOT be reimplemented elsewhere.
+The Fetch AI agent (uAgents + ASI:One) is the single home for the project's AI
+logic. Its responsibilities are:
 
-The agent MUST NOT contain application business logic, authentication,
+- **Analyzing study material** (typed notes, extracted document text, and uploaded
+  images/files via vision).
+- **Generating quizzes** of multiple question types — multiple-choice,
+  fill-in-the-blank, essay/free-response, and matching.
+- **Grading free-text answers by AI semantic evaluation** — short-answer and
+  fill-in-the-blank (correct/incorrect), and essay/free-response (a numeric score
+  plus written feedback).
+- **General open-ended chat** — free-form conversational Q&A, independent of any
+  study material.
+- **Image/file content analysis (vision)** — understanding uploaded content to
+  power both conversational Q&A about it and quiz generation from it.
+
+All of this AI logic MUST live in the agent and MUST NOT be reimplemented
+elsewhere. The agent MUST NOT contain application business logic, authentication,
 authorization, persistence decisions, or user-workflow orchestration. In
-particular, the backend — not the agent — orchestrates requests, stores generated
-quizzes and attempt results, and deterministically scores multiple-choice
-questions (exact comparison of the selected option to the correct option). The
-backend invokes the agent through a defined contract and treats its output as data.
+particular, the backend — not the agent — orchestrates requests, stores quizzes,
+attempts, and chat conversations, enforces access control, and deterministically
+scores the objective question types: **multiple-choice** (selected option vs.
+correct option) and **matching** (count of correct pairings). The backend invokes
+the agent through a defined contract and treats its output (questions, scores,
+feedback, chat replies, analysis) as data.
 
 **Rationale**: A single, well-scoped home for AI logic keeps the agent swappable
 and testable, and stops AI concerns from leaking into — or being duplicated
-across — the rest of the codebase. Short-answer grading requires semantic judgment
-of free text, which is inherently an AI task and therefore belongs with the other
-AI responsibilities; deterministic multiple-choice scoring is not, so it stays in
-the backend.
+across — the rest of the codebase. Tasks requiring judgment over free text, natural
+language, or images (generation, semantic/essay grading, chat, vision) are
+inherently AI work and belong in the agent; scoring that is a deterministic
+comparison (multiple-choice, matching) is not, so it stays in the backend where it
+is trivially testable without the agent.
 
 ### III. Managed Platform for Auth & Data
 
@@ -147,4 +167,4 @@ wins unless it is formally amended.
   Core Principles (notably the Constitution Check gate in the plan template).
   Justified exceptions MUST be recorded in the plan's Complexity Tracking section.
 
-**Version**: 1.1.0 | **Ratified**: 2026-07-23 | **Last Amended**: 2026-07-23
+**Version**: 1.2.0 | **Ratified**: 2026-07-23 | **Last Amended**: 2026-07-24

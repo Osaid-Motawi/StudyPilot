@@ -6,6 +6,17 @@
  * Initialization is LAZY: firebase-admin is only touched the first time a real
  * handle is requested at runtime. Tests never trigger initialization because
  * they inject mock handles via setDb()/setAuth() before any call.
+ *
+ * Per-user scoping convention (T008, Constitution v1.2.0 — backend owns
+ * Firestore + isolation). ALL user data lives under `users/{uid}` and is always
+ * addressed as `getDb().collection('users').doc(uid).collection(<name>)`:
+ *   - users/{uid}/quizzes/{quizId}     (feature 001, extended in 002)
+ *   - users/{uid}/attempts/{attemptId} (feature 001, extended in 002)
+ *   - users/{uid}/chats/{chatId}       (feature 002 US2/US4 — general + analysis
+ *                                        conversations; no new client needed,
+ *                                        same scoping pattern as above)
+ * Cross-user reads are impossible because the uid path segment is taken from the
+ * verified Firebase token, never from the request body.
  */
 
 let _db = null;

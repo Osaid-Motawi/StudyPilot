@@ -2,7 +2,14 @@
 
 const { getDb } = require('../clients/firestoreClient');
 const agentClient = require('../clients/agentClient');
-const { buildQuizDoc, buildTakingView, buildQuizListItem } = require('../lib/quizModel');
+const {
+  buildQuizDoc,
+  buildTakingView,
+  buildQuizListItem,
+  normalizeQuestionType,
+  MATCHING_MIN_PAIRS,
+  MATCHING_MAX_PAIRS,
+} = require('../lib/quizModel');
 const { createError } = require('../middleware/errorHandler');
 
 // Minimum amount of study material (trimmed chars) needed to attempt generation.
@@ -13,10 +20,33 @@ function quizzesCol(uid) {
 }
 
 /**
+ * Resolve the requested question count. For matching, num_questions is the pair
+ * count and is clamped to 3–10 (FR-011). For other types it is passed through
+ * (the agent applies its own default when omitted).
+ */
+function resolveNumQuestions(questionType, numQuestions) {
+  const n = Number(numQuestions);
+  if (questionType === 'matching') {
+    if (!Number.isFinite(n)) return MATCHING_MIN_PAIRS;
+    return Math.max(MATCHING_MIN_PAIRS, Math.min(MATCHING_MAX_PAIRS, Math.trunc(n)));
+  }
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : undefined;
+}
+
+/**
  * Validate sufficiency, call the agent, persist under
  * users/{uid}/quizzes/{quizId}, and return the answers-hidden taking view.
+ *
+ * @param {object} args
+ * @param {string} [args.text] - study text (pasted or extracted PDF/.txt).
+ * @param {string} args.sourceType - 'pasted' | 'upload'.
+ * @param {string} [args.questionType] - mcq | fill_blank | essay | matching.
+ * @param {number} [args.numQuestions]
  */
-async function createQuiz({ uid, text, sourceType, title, numMcq, numShort }) {
+async function createQuiz({ uid, text, sourceType, title, questionType, numQuestions }) {
+  const type = normalizeQuestionType(questionType);
+  const num = resolveNumQuestions(type, numQuestions);
+
   const material = typeof text === 'string' ? text.trim() : '';
   if (material.length < MIN_MATERIAL_LENGTH) {
     throw createError(
@@ -26,7 +56,11 @@ async function createQuiz({ uid, text, sourceType, title, numMcq, numShort }) {
     );
   }
 
-  const agentResult = await agentClient.generateQuiz(material, { numMcq, numShort });
+  const agentResult = await agentClient.generateQuiz({
+    text: material,
+    questionType: type,
+    numQuestions: num,
+  });
 
   const ref = quizzesCol(uid).doc();
   const quiz = buildQuizDoc({
@@ -36,6 +70,7 @@ async function createQuiz({ uid, text, sourceType, title, numMcq, numShort }) {
     sourceType,
     sourceText: material,
     title,
+    questionType: type,
   });
 
   await ref.set(quiz);

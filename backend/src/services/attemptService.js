@@ -2,8 +2,8 @@
 
 const { getDb } = require('../clients/firestoreClient');
 const agentClient = require('../clients/agentClient');
-const { scoreMcq } = require('../lib/mcqScoring');
-const { toIso } = require('../lib/quizModel');
+const { scoreMcq, scoreMatching } = require('../lib/scoring');
+const { toIso, normalizeQuestionType } = require('../lib/quizModel');
 const { createError } = require('../middleware/errorHandler');
 
 function usersDoc(uid) {
@@ -18,6 +18,7 @@ function formatAttempt(attempt, quizTitle) {
   const out = {
     id: attempt.id,
     quizId: attempt.quizId,
+    questionType: attempt.questionType,
     submittedAt: toIso(attempt.submittedAt),
     score: attempt.score,
     totalQuestions: attempt.totalQuestions,
@@ -29,10 +30,14 @@ function formatAttempt(attempt, quizTitle) {
 }
 
 /**
- * Load quiz, score MCQs deterministically, grade short-answers via the agent,
- * compute the score, persist under users/{uid}/attempts/{attemptId}, and return
- * the graded result. On agent failure the error propagates and NOTHING is
- * persisted (persistence happens only after all grading succeeds).
+ * Grade an attempt with type-aware dispatch:
+ *   - mcq, matching  -> deterministic backend scoring (lib/scoring.js)
+ *   - fill_blank     -> agent /grade-short-answer
+ *   - essay          -> agent /grade-essay (score 0-100 + feedback)
+ *
+ * Persist under users/{uid}/attempts/{attemptId} and return the graded result.
+ * On agent failure the error propagates and NOTHING is persisted (persistence
+ * happens only after all grading succeeds — carried-over resilience).
  */
 async function submitAttempt({ uid, quizId, answers }) {
   const quizSnap = await usersDoc(uid).collection('quizzes').doc(quizId).get();
@@ -40,6 +45,7 @@ async function submitAttempt({ uid, quizId, answers }) {
     throw createError(404, 'not_found', 'Quiz not found.');
   }
   const quiz = { id: quizSnap.id, ...quizSnap.data() };
+  const type = normalizeQuestionType(quiz.questionType);
 
   const submittedByQuestion = new Map();
   (Array.isArray(answers) ? answers : []).forEach((a) => {
@@ -47,16 +53,21 @@ async function submitAttempt({ uid, quizId, answers }) {
   });
 
   const results = [];
-  let score = 0;
+  const questions = Array.isArray(quiz.questions) ? quiz.questions : [];
 
-  for (const q of quiz.questions) {
+  // Accumulators. Semantics differ by type; scorePercent is authoritative.
+  let correctUnits = 0; // mcq/fill_blank: correct questions; matching: correct pairs
+  let totalUnits = 0; // mcq/fill_blank: questions; matching: pairs
+  let essayScoreSum = 0; // essay: sum of per-question questionScore
+
+  for (const q of questions) {
     const submitted = submittedByQuestion.get(q.id);
 
-    if (q.type === 'mcq') {
-      const idx =
-        submitted && submitted.mcqOptionIndex != null ? submitted.mcqOptionIndex : null;
+    if (type === 'mcq') {
+      const idx = submitted && submitted.mcqOptionIndex != null ? submitted.mcqOptionIndex : null;
       const isCorrect = scoreMcq(q, idx);
-      if (isCorrect) score += 1;
+      if (isCorrect) correctUnits += 1;
+      totalUnits += 1;
       results.push({
         questionId: q.id,
         type: 'mcq',
@@ -64,16 +75,28 @@ async function submitAttempt({ uid, quizId, answers }) {
         isCorrect,
         correctAnswer: q.options[q.correctOptionIndex],
       });
-    } else {
-      const userText =
-        submitted && submitted.text != null ? String(submitted.text) : '';
+    } else if (type === 'matching') {
+      const pairs = submitted && Array.isArray(submitted.pairs) ? submitted.pairs : null;
+      const { correctCount, totalPairs } = scoreMatching(q, pairs);
+      correctUnits += correctCount;
+      totalUnits += totalPairs;
+      results.push({
+        questionId: q.id,
+        type: 'matching',
+        userAnswer: pairs,
+        isCorrect: totalPairs > 0 && correctCount === totalPairs,
+        correctCount,
+        totalPairs,
+        correctPairs: q.correctPairs,
+      });
+    } else if (type === 'fill_blank') {
+      const userText = submitted && submitted.text != null ? String(submitted.text) : '';
       let isCorrect = false;
       let rationale = '';
       if (userText.trim() === '') {
-        // Unanswered -> incorrect, no agent call (FR-016).
         rationale = 'No answer was provided.';
       } else {
-        const verdict = await agentClient.gradeShortAnswer({
+        const verdict = await agentClient.gradeFillBlank({
           question: q.prompt,
           expectedAnswer: q.expectedAnswer,
           userAnswer: userText,
@@ -81,26 +104,68 @@ async function submitAttempt({ uid, quizId, answers }) {
         isCorrect = !!verdict.isCorrect;
         rationale = verdict.rationale || '';
       }
-      if (isCorrect) score += 1;
+      if (isCorrect) correctUnits += 1;
+      totalUnits += 1;
       results.push({
         questionId: q.id,
-        type: 'short_answer',
+        type: 'fill_blank',
         userAnswer: userText === '' ? null : userText,
         isCorrect,
         correctAnswer: q.expectedAnswer,
         rationale,
       });
+    } else if (type === 'essay') {
+      const userText = submitted && submitted.text != null ? String(submitted.text) : '';
+      let questionScore = 0;
+      let feedback = '';
+      if (userText.trim() === '') {
+        questionScore = 0;
+        feedback = 'No answer was provided.';
+      } else {
+        const verdict = await agentClient.gradeEssay({
+          question: q.prompt,
+          referenceAnswer: q.referenceAnswer,
+          userAnswer: userText,
+        });
+        questionScore = verdict.score;
+        feedback = verdict.feedback || '';
+      }
+      essayScoreSum += questionScore;
+      totalUnits += 1; // question count for essay
+      results.push({
+        questionId: q.id,
+        type: 'essay',
+        userAnswer: userText === '' ? null : userText,
+        questionScore,
+        feedback,
+        isCorrect: questionScore >= 50,
+        correctAnswer: q.referenceAnswer,
+      });
     }
   }
 
-  const totalQuestions = quiz.questions.length;
-  const scorePercent = totalQuestions ? Math.round((score / totalQuestions) * 100) : 0;
+  // Compute the unified score + scorePercent per data-model.md.
+  let score;
+  let totalQuestions;
+  let scorePercent;
+  if (type === 'essay') {
+    const nQuestions = questions.length;
+    const mean = nQuestions ? essayScoreSum / nQuestions : 0;
+    score = Math.round(mean); // attempt score = mean of per-question questionScore
+    scorePercent = Math.round(mean);
+    totalQuestions = nQuestions;
+  } else {
+    score = correctUnits; // correct count (questions, or pairs for matching)
+    totalQuestions = totalUnits; // question count (or pair count for matching)
+    scorePercent = totalUnits ? Math.round((correctUnits / totalUnits) * 100) : 0;
+  }
 
   const ref = usersDoc(uid).collection('attempts').doc();
   const attempt = {
     id: ref.id,
     ownerId: uid,
     quizId,
+    questionType: type,
     submittedAt: new Date(),
     score,
     totalQuestions,
@@ -124,9 +189,7 @@ async function listAttempts({ uid, quizId }) {
   quizzesSnap.docs.forEach((d) => titleById.set(d.id, (d.data() || {}).title));
 
   const items = attempts.map((a) => formatAttempt(a, titleById.get(a.quizId) || null));
-  items.sort((x, y) =>
-    String(y.submittedAt || '').localeCompare(String(x.submittedAt || ''))
-  );
+  items.sort((x, y) => String(y.submittedAt || '').localeCompare(String(x.submittedAt || '')));
   return items;
 }
 

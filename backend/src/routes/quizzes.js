@@ -10,14 +10,14 @@ const router = express.Router();
 
 async function handleTextCreate(req, res, next) {
   try {
-    const { text, title, numMcq, numShort } = req.body || {};
+    const { text, title, questionType, numQuestions } = req.body || {};
     const quiz = await quizService.createQuiz({
       uid: req.uid,
       text,
       sourceType: 'pasted',
       title,
-      numMcq,
-      numShort,
+      questionType,
+      numQuestions,
     });
     return res.status(201).json(quiz);
   } catch (e) {
@@ -28,16 +28,16 @@ async function handleTextCreate(req, res, next) {
 async function handleUploadCreate(req, res, next) {
   try {
     if (!req.file) throw createError(400, 'no_file', 'No file was uploaded.');
-    const text = await extractText(req.file.buffer, req.file.mimetype || req.file.originalname);
     const body = req.body || {};
-    const quiz = await quizService.createQuiz({
+    const common = {
       uid: req.uid,
-      text,
-      sourceType: 'upload',
       title: body.title,
-      numMcq: body.numMcq,
-      numShort: body.numShort,
-    });
+      questionType: body.questionType,
+      numQuestions: body.numQuestions,
+    };
+
+    const text = await extractText(req.file.buffer, req.file.mimetype || req.file.originalname);
+    const quiz = await quizService.createQuiz({ ...common, text, sourceType: 'upload' });
     return res.status(201).json(quiz);
   } catch (e) {
     return next(e);

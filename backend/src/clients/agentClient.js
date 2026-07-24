@@ -31,30 +31,32 @@ async function postJson(path, body) {
     throw createError(
       502,
       'agent_unavailable',
-      'The quiz service is temporarily unavailable. Please try again.'
+      'The AI service is temporarily unavailable. Please try again.'
     );
   }
   if (!res.ok) {
     if (res.status === 504) {
-      throw createError(504, 'agent_timeout', 'The quiz service timed out. Please try again.');
+      throw createError(504, 'agent_timeout', 'The AI service timed out. Please try again.');
     }
-    throw createError(502, 'agent_error', 'The quiz service failed. Please try again.');
+    throw createError(502, 'agent_error', 'The AI service failed. Please try again.');
   }
   return res.json();
 }
 
 /**
- * POST {AGENT_BASE_URL}/generate-quiz
- * @returns {Promise<{title:string, questions:Array}>} raw agent response (snake_case).
+ * POST {AGENT_BASE_URL}/generate-quiz  (002: type-aware, text only)
+ *
+ * @param {object} args
+ * @param {string} [args.text] - study text (pasted or backend-extracted PDF/.txt).
+ * @param {string} [args.questionType] - mcq | fill_blank | essay | matching.
+ * @param {number} [args.numQuestions] - question count (pairs for matching).
+ * @returns {Promise<{title:string, question_type:string, questions:Array}>} raw agent response (snake_case).
  */
-async function generateQuiz(text, opts = {}) {
-  const numMcq = Number(opts.numMcq);
-  const numShort = Number(opts.numShort);
-  return postJson('/generate-quiz', {
-    text,
-    num_mcq: Number.isFinite(numMcq) && numMcq > 0 ? numMcq : 5,
-    num_short: Number.isFinite(numShort) && numShort > 0 ? numShort : 3,
-  });
+async function generateQuiz({ text, questionType, numQuestions } = {}) {
+  const body = { question_type: questionType || 'mcq', text };
+  const n = Number(numQuestions);
+  if (Number.isFinite(n) && n > 0) body.num_questions = Math.trunc(n);
+  return postJson('/generate-quiz', body);
 }
 
 /**
@@ -70,4 +72,55 @@ async function gradeShortAnswer({ question, expectedAnswer, userAnswer }) {
   return { isCorrect: !!data.is_correct, rationale: data.rationale || '' };
 }
 
-module.exports = { generateQuiz, gradeShortAnswer, setFetch };
+/**
+ * fill_blank grading REUSES the /grade-short-answer endpoint (agent-api.md).
+ * Kept as a distinct name so the attempt service dispatches by type clearly.
+ */
+async function gradeFillBlank(args) {
+  return gradeShortAnswer(args);
+}
+
+/**
+ * POST {AGENT_BASE_URL}/grade-essay
+ * @param {object} args
+ * @param {string} args.question
+ * @param {string} [args.referenceAnswer]
+ * @param {string} args.userAnswer
+ * @returns {Promise<{score:number, feedback:string}>} score 0-100.
+ */
+async function gradeEssay({ question, referenceAnswer, userAnswer }) {
+  const data = await postJson('/grade-essay', {
+    question,
+    reference_answer: referenceAnswer == null ? '' : referenceAnswer,
+    user_answer: userAnswer == null ? '' : userAnswer,
+  });
+  let score = Number(data.score);
+  if (!Number.isFinite(score)) score = 0;
+  score = Math.max(0, Math.min(100, Math.round(score)));
+  return { score, feedback: data.feedback || '' };
+}
+
+/**
+ * POST {AGENT_BASE_URL}/chat  (US2/US4 — general or content-grounded chat).
+ * Stub wired for later feature slices; the backend supplies full history.
+ *
+ * @param {object} args
+ * @param {{role:string,content:string}[]} args.messages
+ * @param {string} [args.contextText] - grounding content for analysis chats.
+ * @returns {Promise<{reply:string}>}
+ */
+async function chat({ messages, contextText } = {}) {
+  const body = { messages: Array.isArray(messages) ? messages : [] };
+  if (contextText != null) body.context_text = contextText;
+  const data = await postJson('/chat', body);
+  return { reply: data.reply || '' };
+}
+
+module.exports = {
+  generateQuiz,
+  gradeShortAnswer,
+  gradeFillBlank,
+  gradeEssay,
+  chat,
+  setFetch,
+};

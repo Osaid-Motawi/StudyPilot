@@ -12,8 +12,10 @@ const NOTES =
   'Photosynthesis converts light energy into chemical energy stored in glucose. ' +
   'The light reactions occur in the thylakoid membrane and release oxygen.';
 
+// 002: one question type per quiz. This flow exercises the mcq type end-to-end.
 const AGENT_QUIZ = {
   title: 'Photosynthesis Basics',
+  question_type: 'mcq',
   questions: [
     {
       type: 'mcq',
@@ -22,9 +24,10 @@ const AGENT_QUIZ = {
       correct_option_index: 0,
     },
     {
-      type: 'short_answer',
+      type: 'mcq',
       prompt: 'What gas is released during photosynthesis?',
-      expected_answer: 'Oxygen',
+      options: ['Oxygen', 'Nitrogen', 'Carbon dioxide'],
+      correct_option_index: 0,
     },
   ],
 };
@@ -38,27 +41,40 @@ beforeEach(() => {
 
 const auth = (req) => req.set('Authorization', 'Bearer userA');
 
-describe('US1: generate → take → score flow', () => {
+describe('US1: generate → take → score flow (mcq single-type)', () => {
   test('requires authentication', async () => {
     const res = await request(app).post('/api/quizzes').send({ text: NOTES });
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('unauthenticated');
   });
 
-  test('POST /api/quizzes creates a quiz with answers hidden', async () => {
+  test('POST /api/quizzes creates an mcq quiz with answers hidden', async () => {
     agentClient.generateQuiz.mockResolvedValue(AGENT_QUIZ);
-    const res = await auth(request(app).post('/api/quizzes')).send({ text: NOTES });
+    const res = await auth(request(app).post('/api/quizzes')).send({
+      text: NOTES,
+      questionType: 'mcq',
+    });
 
     expect(res.status).toBe(201);
     expect(res.body.title).toBe('Photosynthesis Basics');
+    expect(res.body.questionType).toBe('mcq');
     expect(res.body.questions).toHaveLength(2);
     const serialized = JSON.stringify(res.body);
     expect(serialized).not.toContain('correctOptionIndex');
-    expect(serialized).not.toContain('expectedAnswer');
-    expect(serialized).not.toContain('Oxygen');
-    // Mixed types present.
-    const types = res.body.questions.map((q) => q.type).sort();
-    expect(types).toEqual(['mcq', 'short_answer']);
+    expect(serialized).not.toContain('correct_option_index');
+    // All questions are the single chosen type.
+    expect(res.body.questions.every((q) => q.type === 'mcq')).toBe(true);
+    expect(res.body.questions[0].options).toContain('Thylakoid membrane');
+  });
+
+  test('defaults to mcq when questionType is omitted', async () => {
+    agentClient.generateQuiz.mockResolvedValue(AGENT_QUIZ);
+    const res = await auth(request(app).post('/api/quizzes')).send({ text: NOTES });
+    expect(res.status).toBe(201);
+    expect(res.body.questionType).toBe('mcq');
+    expect(agentClient.generateQuiz).toHaveBeenCalledWith(
+      expect.objectContaining({ questionType: 'mcq', text: expect.any(String) })
+    );
   });
 
   test('too-short notes -> 422 needs more material', async () => {
@@ -76,16 +92,13 @@ describe('US1: generate → take → score flow', () => {
     const res = await auth(request(app).get(`/api/quizzes/${id}`));
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(id);
-    expect(JSON.stringify(res.body)).not.toContain('expectedAnswer');
+    expect(res.body.questionType).toBe('mcq');
+    expect(JSON.stringify(res.body)).not.toContain('correctOptionIndex');
     expect(res.body.questions[0]).not.toHaveProperty('correctOptionIndex');
   });
 
-  test('submit attempt scores MCQ deterministically and grades short-answer via agent', async () => {
+  test('submit attempt scores MCQ deterministically (no agent call)', async () => {
     agentClient.generateQuiz.mockResolvedValue(AGENT_QUIZ);
-    agentClient.gradeShortAnswer.mockResolvedValue({
-      isCorrect: true,
-      rationale: 'O2 is oxygen; matches the expected answer.',
-    });
 
     const created = await auth(request(app).post('/api/quizzes')).send({ text: NOTES });
     const id = created.body.id;
@@ -93,7 +106,7 @@ describe('US1: generate → take → score flow', () => {
     const res = await auth(request(app).post(`/api/quizzes/${id}/attempts`)).send({
       answers: [
         { questionId: 'q1', mcqOptionIndex: 0 },
-        { questionId: 'q2', text: 'it gives off O2' },
+        { questionId: 'q2', mcqOptionIndex: 0 },
       ],
     });
 
@@ -104,13 +117,9 @@ describe('US1: generate → take → score flow', () => {
     const mcq = res.body.answers.find((a) => a.questionId === 'q1');
     expect(mcq.isCorrect).toBe(true);
     expect(mcq.correctAnswer).toBe('Thylakoid membrane');
-    const sa = res.body.answers.find((a) => a.questionId === 'q2');
-    expect(sa.isCorrect).toBe(true);
-    expect(sa.correctAnswer).toBe('Oxygen');
-    expect(sa.rationale).toContain('oxygen');
   });
 
-  test('blank/unanswered questions are scored incorrect without calling the agent', async () => {
+  test('blank/unanswered questions are scored incorrect', async () => {
     agentClient.generateQuiz.mockResolvedValue(AGENT_QUIZ);
 
     const created = await auth(request(app).post('/api/quizzes')).send({ text: NOTES });
@@ -122,34 +131,8 @@ describe('US1: generate → take → score flow', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.score).toBe(0);
-    const sa = res.body.answers.find((a) => a.questionId === 'q2');
-    expect(sa.isCorrect).toBe(false);
-    expect(sa.userAnswer).toBeNull();
-    expect(agentClient.gradeShortAnswer).not.toHaveBeenCalled();
-  });
-
-  test('agent failure during grading -> 502 and attempt not persisted', async () => {
-    agentClient.generateQuiz.mockResolvedValue(AGENT_QUIZ);
-    const err = Object.assign(new Error('agent down'), { status: 502, code: 'agent_error' });
-    err.name = 'AppError';
-    // Make it an AppError instance so errorHandler exposes it.
-    const { AppError } = require('../../src/middleware/errorHandler');
-    agentClient.gradeShortAnswer.mockRejectedValue(
-      new AppError(502, 'agent_error', 'The quiz service failed. Please try again.')
-    );
-
-    const created = await auth(request(app).post('/api/quizzes')).send({ text: NOTES });
-    const id = created.body.id;
-
-    const res = await auth(request(app).post(`/api/quizzes/${id}/attempts`)).send({
-      answers: [
-        { questionId: 'q1', mcqOptionIndex: 0 },
-        { questionId: 'q2', text: 'oxygen' },
-      ],
-    });
-    expect(res.status).toBe(502);
-
-    const list = await auth(request(app).get('/api/attempts'));
-    expect(list.body.attempts).toHaveLength(0);
+    const q2 = res.body.answers.find((a) => a.questionId === 'q2');
+    expect(q2.isCorrect).toBe(false);
+    expect(q2.userAnswer).toBeNull();
   });
 });

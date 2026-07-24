@@ -23,6 +23,7 @@ vi.mock('../src/services/apiClient.js', () => {
     id: 'qz_1',
     title: 'Photosynthesis Basics',
     sourceType: 'pasted',
+    questionType: 'mcq',
     questions: [
       {
         id: 'q1',
@@ -32,14 +33,15 @@ vi.mock('../src/services/apiClient.js', () => {
       },
       {
         id: 'q2',
-        type: 'short_answer',
-        prompt: 'What gas is released during photosynthesis?',
+        type: 'fill_blank',
+        prompt: 'The gas released during photosynthesis is ____.',
       },
     ],
   };
   const result = {
     id: 'at_1',
     quizId: 'qz_1',
+    questionType: 'mcq',
     submittedAt: '2026-07-23T10:05:00Z',
     score: 2,
     totalQuestions: 2,
@@ -54,7 +56,7 @@ vi.mock('../src/services/apiClient.js', () => {
       },
       {
         questionId: 'q2',
-        type: 'short_answer',
+        type: 'fill_blank',
         userAnswer: 'it gives off O2',
         isCorrect: true,
         correctAnswer: 'Oxygen',
@@ -85,7 +87,8 @@ describe('core flow: create -> take -> results', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    // Create page: paste notes and generate.
+    // Create page: choose the Multiple-choice question type, paste notes, generate.
+    await user.click(screen.getByRole('tab', { name: 'Multiple-choice' }));
     const textarea = await screen.findByLabelText('Study notes');
     await user.type(textarea, 'Photosynthesis converts light energy...');
     await user.click(screen.getByRole('button', { name: /generate quiz/i }));
@@ -93,7 +96,7 @@ describe('core flow: create -> take -> results', () => {
     // Quiz taker renders both question types.
     await screen.findByText(/Where does the light reaction occur/i);
     expect(
-      screen.getByText(/What gas is released during photosynthesis/i)
+      screen.getByText(/The gas released during photosynthesis/i)
     ).toBeInTheDocument();
 
     // Answer the MCQ and the short answer.

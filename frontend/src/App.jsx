@@ -12,7 +12,9 @@ import { onAuthChanged, signOut } from './services/authService.js';
 import { getQuiz, submitAttempt } from './services/apiClient.js';
 import LoginPage from './pages/LoginPage.jsx';
 import CreateQuizPage from './pages/CreateQuizPage.jsx';
-import HistoryPage from './pages/HistoryPage.jsx';
+import ChatPage from './pages/ChatPage.jsx';
+import ProfilePage from './pages/ProfilePage.jsx';
+import EditProfilePage from './pages/EditProfilePage.jsx';
 import QuizTaker from './components/QuizTaker.jsx';
 import QuizResults from './components/QuizResults.jsx';
 
@@ -84,13 +86,13 @@ function TakeRoute({ quiz, setQuiz, setResult }) {
 function ResultsRoute({ result }) {
   const navigate = useNavigate();
   if (!result) return <Navigate to="/" replace />;
-  return <QuizResults result={result} onBack={() => navigate('/history')} />;
+  return <QuizResults result={result} onBack={() => navigate('/profile')} />;
 }
 
-function HistoryRoute({ setResult }) {
+function ProfileRoute({ setResult }) {
   const navigate = useNavigate();
   return (
-    <HistoryPage
+    <ProfilePage
       onOpenAttempt={(r) => {
         setResult(r);
         navigate('/results');
@@ -110,11 +112,20 @@ function Nav({ user }) {
   if (!user) return null;
   return (
     <nav className="nav">
-      <Link to="/">Create</Link>
-      <Link to="/history">History</Link>
+      <Link to="/" className="brand brand-sm">
+        <span className="brand-mark" aria-hidden="true">
+          SP
+        </span>
+        <span className="brand-name">StudyPilot</span>
+      </Link>
+      <span className="nav-links">
+        <Link to="/">Create Quiz</Link>
+        <Link to="/chat">AI Chat</Link>
+        <Link to="/profile">Profile</Link>
+      </span>
       <span className="spacer" />
-      <span className="user-email">{user.email}</span>
-      <button type="button" onClick={() => signOut()}>
+      <span className="user-email">{user.displayName || user.email}</span>
+      <button type="button" className="btn-ghost" onClick={() => signOut()}>
         Sign out
       </button>
     </nav>
@@ -170,11 +181,29 @@ export default function App() {
               </RequireAuth>
             }
           />
+          {/* Legacy History page retired — redirect to the Profile page. */}
+          <Route path="/history" element={<Navigate to="/profile" replace />} />
           <Route
-            path="/history"
+            path="/chat"
             element={
               <RequireAuth user={user}>
-                <HistoryRoute setResult={setResult} />
+                <ChatPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <RequireAuth user={user}>
+                <ProfileRoute setResult={setResult} />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/profile/edit"
+            element={
+              <RequireAuth user={user}>
+                <EditProfilePage />
               </RequireAuth>
             }
           />

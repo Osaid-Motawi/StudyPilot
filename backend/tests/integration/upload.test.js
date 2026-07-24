@@ -10,16 +10,13 @@ const { setPdfExtractor, resetPdfExtractor } = require('../../src/lib/extractTex
 const { makeMockDb } = require('../helpers/mockFirestore');
 const { createApp } = require('../../src/app');
 
+// 002: single-type quiz (mcq).
 const AGENT_QUIZ = {
   title: 'From Upload',
+  question_type: 'mcq',
   questions: [
-    {
-      type: 'mcq',
-      prompt: 'Q?',
-      options: ['A', 'B'],
-      correct_option_index: 1,
-    },
-    { type: 'short_answer', prompt: 'Explain?', expected_answer: 'Because' },
+    { type: 'mcq', prompt: 'Q1?', options: ['A', 'B'], correct_option_index: 1 },
+    { type: 'mcq', prompt: 'Q2?', options: ['C', 'D'], correct_option_index: 0 },
   ],
 };
 

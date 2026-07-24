@@ -5,6 +5,9 @@ const verifyFirebaseToken = require('./middleware/verifyFirebaseToken');
 const { errorHandler } = require('./middleware/errorHandler');
 const quizzesRouter = require('./routes/quizzes');
 const attemptsRouter = require('./routes/attempts');
+const profileRouter = require('./routes/profile');
+const chatsRouter = require('./routes/chats');
+const analysisRouter = require('./routes/analysis');
 
 function createApp() {
   const app = express();
@@ -35,6 +38,9 @@ function createApp() {
   // Routes.
   app.use('/api/quizzes', quizzesRouter);
   app.use('/api', attemptsRouter);
+  app.use('/api/profile', profileRouter);
+  app.use('/api/chats', chatsRouter);
+  app.use('/api/analysis', analysisRouter);
 
   // Centralized error model — mounted last.
   app.use(errorHandler);

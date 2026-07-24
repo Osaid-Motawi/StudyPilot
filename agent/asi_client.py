@@ -1,20 +1,20 @@
 """Thin wrapper around the OpenAI SDK pointed at ASI:One.
 
 ASI:One is OpenAI-Chat-Completions compatible, so we use the `openai` client
-with a swapped `base_url`. Both capabilities use strict JSON-schema structured
-output, so the parsed responses are always schema-valid.
+with a swapped `base_url`. Generation and grading use strict JSON-schema
+structured output; chat returns free-form text.
 
 Testability (Constitution Principle IV): the OpenAI client is created by a
 module-level factory `get_client()` and can be overridden three ways so tests
 never touch the network or need a real API key:
-  * pass `client=<mock>` directly to `generate_quiz` / `grade_short_answer`, or
+  * pass `client=<mock>` directly to a wrapper, or
   * call `set_client(<mock>)` to install a process-wide stub, or
-  * monkeypatch `get_client`.
+  * monkeypatch `get_client` (or the individual wrapper functions).
 """
 
 import json
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from openai import OpenAI
 
@@ -53,15 +53,16 @@ def _parse_json_content(response: Any) -> Dict[str, Any]:
 
 def generate_quiz(
     text: str,
-    num_mcq: int = 5,
-    num_short: int = 3,
+    question_type: str = "mcq",
+    n: int = 5,
     client: Optional[Any] = None,
 ) -> Dict[str, Any]:
-    """Generate a mixed quiz from study material.
+    """Generate a single-type quiz from study material.
 
-    Returns the parsed dict {"title": str, "questions": [...]}. Enforcement of
-    the >=1-of-each-type rule is handled by the caller (agent handler) so this
-    wrapper stays a thin ASI:One boundary.
+    Returns the parsed dict {"title": str, "questions": [...]} where every
+    question is of `question_type`. Enforcement (per-type shape, matching pair
+    clamping) is handled by the caller (agent handler) so this stays a thin
+    ASI:One boundary.
     """
     client = client or get_client()
     response = client.chat.completions.create(
@@ -71,13 +72,13 @@ def generate_quiz(
             {
                 "role": "user",
                 "content": prompts.build_quiz_generation_user_prompt(
-                    text, num_mcq, num_short
+                    text, question_type, n
                 ),
             },
         ],
         response_format={
             "type": "json_schema",
-            "json_schema": prompts.QUIZ_GENERATION_SCHEMA,
+            "json_schema": prompts.quiz_schema_for(question_type),
         },
     )
     return _parse_json_content(response)
@@ -89,7 +90,7 @@ def grade_short_answer(
     user: str,
     client: Optional[Any] = None,
 ) -> Dict[str, Any]:
-    """Semantically grade one short-answer response.
+    """Semantically grade one short-answer / fill-in-the-blank response.
 
     Returns the parsed dict {"is_correct": bool, "rationale": str}. Uses a low
     temperature for consistent, deterministic verdicts across attempts.
@@ -113,3 +114,62 @@ def grade_short_answer(
         },
     )
     return _parse_json_content(response)
+
+
+def grade_essay(
+    question: str,
+    reference: str,
+    user: str,
+    client: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """Grade one essay / free-response answer.
+
+    Returns the parsed dict {"score": int (0-100), "feedback": str}. Low
+    temperature keeps scores deterministic across attempts.
+    """
+    client = client or get_client()
+    response = client.chat.completions.create(
+        model=_model(),
+        temperature=0,
+        messages=[
+            {"role": "system", "content": prompts.ESSAY_GRADING_SYSTEM},
+            {
+                "role": "user",
+                "content": prompts.build_essay_grading_user_prompt(
+                    question, reference, user
+                ),
+            },
+        ],
+        response_format={
+            "type": "json_schema",
+            "json_schema": prompts.ESSAY_GRADING_SCHEMA,
+        },
+    )
+    return _parse_json_content(response)
+
+
+def chat(
+    messages: List[Dict[str, str]],
+    context_text: Optional[str] = None,
+    client: Optional[Any] = None,
+) -> str:
+    """Produce the assistant's next reply for a (stateless) conversation.
+
+    `messages` is the ordered prior turns + new user message ({role, content}).
+    `context_text`, when present, grounds the reply in supplied study material
+    (analysis chats). Returns the reply text (free-form, no JSON schema).
+    """
+    client = client or get_client()
+    convo: List[Dict[str, str]] = [
+        {"role": "system", "content": prompts.CHAT_SYSTEM}
+    ]
+    if context_text and context_text.strip():
+        convo.append(
+            {
+                "role": "system",
+                "content": prompts.build_chat_context_message(context_text),
+            }
+        )
+    convo.extend(messages)
+    response = client.chat.completions.create(model=_model(), messages=convo)
+    return response.choices[0].message.content or ""

@@ -51,21 +51,29 @@ async function request(path, { method = 'GET', body, isForm = false } = {}) {
   return res.json();
 }
 
-// POST /api/quizzes (text mode)
-export function createQuizFromText({ text, title, numMcq, numShort }) {
+// POST /api/quizzes (text mode). questionType: mcq | fill_blank | essay | matching.
+export function createQuizFromText({
+  text,
+  title,
+  questionType = 'mcq',
+  numQuestions,
+}) {
   return request('/quizzes', {
     method: 'POST',
-    body: { text, title, numMcq, numShort },
+    body: { text, title, questionType, numQuestions },
   });
 }
 
-// POST /api/quizzes (multipart upload mode)
-export function createQuizFromFile(file, { title, numMcq, numShort } = {}) {
+// POST /api/quizzes (multipart upload mode).
+export function createQuizFromFile(
+  file,
+  { title, questionType = 'mcq', numQuestions } = {}
+) {
   const form = new FormData();
   form.append('file', file);
   if (title != null) form.append('title', title);
-  if (numMcq != null) form.append('numMcq', String(numMcq));
-  if (numShort != null) form.append('numShort', String(numShort));
+  form.append('questionType', questionType);
+  if (numQuestions != null) form.append('numQuestions', String(numQuestions));
   return request('/quizzes', { method: 'POST', body: form, isForm: true });
 }
 
@@ -96,4 +104,48 @@ export function listAttempts(quizId) {
 // GET /api/attempts/:id
 export function getAttempt(attemptId) {
   return request(`/attempts/${attemptId}`);
+}
+
+// ---- Profile (Part 2 — used by later phases) ------------------------------
+
+// GET /api/profile/overview -> { averageScorePercent, totalQuizzes }
+export function getProfileOverview() {
+  return request('/profile/overview');
+}
+
+// ---- General AI Chat (Part 3 — used by later phases) ----------------------
+
+// POST /api/chats -> { id, title, messages }
+export function createChat({ message }) {
+  return request('/chats', { method: 'POST', body: { message } });
+}
+
+// POST /api/chats/:id/messages -> { id, title, messages }
+export function sendChatMessage(chatId, { message }) {
+  return request(`/chats/${chatId}/messages`, {
+    method: 'POST',
+    body: { message },
+  });
+}
+
+// GET /api/chats -> { chats: [{ id, kind, title, updatedAt }] }
+export function listChats() {
+  return request('/chats');
+}
+
+// GET /api/chats/:id -> { id, kind, title, messages }
+export function getChat(chatId) {
+  return request(`/chats/${chatId}`);
+}
+
+// ---- File/Image Analysis (Part 4 — used by later phases) ------------------
+
+// POST /api/analysis (multipart) — chat about an uploaded file/image.
+// Returns { chatId, reply }; continue the conversation via sendChatMessage.
+// (Quiz generation from a file lives on the Create Quiz page, not here.)
+export function analyzeUpload(file, { question } = {}) {
+  const form = new FormData();
+  form.append('file', file);
+  if (question != null) form.append('question', question);
+  return request('/analysis', { method: 'POST', body: form, isForm: true });
 }
