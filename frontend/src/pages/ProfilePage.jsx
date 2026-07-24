@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getProfileOverview, listAttempts, getAttempt } from '../services/apiClient.js';
-import { currentUser } from '../services/authService.js';
+import {
+  getProfileOverview,
+  listAttempts,
+  getAttempt,
+  getProfile,
+} from '../services/apiClient.js';
+import { currentUser, signOut } from '../services/authService.js';
 
 // Profile: read-only account summary (name + email, with an Edit button that
 // routes to /profile/edit), performance overview, and full quiz history.
@@ -12,9 +17,17 @@ const TYPE_LABELS = {
   matching: 'Matching',
 };
 
+const TYPE_ICONS = {
+  mcq: '🔘',
+  fill_blank: '✏️',
+  essay: '📝',
+  matching: '🔗',
+};
+
 export default function ProfilePage({ onOpenAttempt }) {
   const [overview, setOverview] = useState(null);
   const [attempts, setAttempts] = useState([]);
+  const [photoData, setPhotoData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -28,10 +41,15 @@ export default function ProfilePage({ onOpenAttempt }) {
       setLoading(true);
       setError('');
       try {
-        const [ov, at] = await Promise.all([getProfileOverview(), listAttempts()]);
+        const [ov, at, profile] = await Promise.all([
+          getProfileOverview(),
+          listAttempts(),
+          getProfile().catch(() => null),
+        ]);
         if (!active) return;
         setOverview(ov || { averageScorePercent: 0, totalQuizzes: 0 });
         setAttempts(at?.attempts || []);
+        setPhotoData(profile?.photoData || null);
       } catch (err) {
         if (active) setError(err?.message || 'Could not load your profile.');
       } finally {
@@ -59,10 +77,12 @@ export default function ProfilePage({ onOpenAttempt }) {
     return Number.isNaN(d.getTime()) ? ts : d.toLocaleString();
   }
   const typeLabel = (t) => TYPE_LABELS[t] || t || '—';
+  const typeIcon = (t) => TYPE_ICONS[t] || '❓';
 
   if (loading) return <p>Loading profile…</p>;
 
   const initials = (displayName || email || '?').trim().charAt(0).toUpperCase();
+  const avgScore = overview?.totalQuizzes ? overview.averageScorePercent : 0;
 
   return (
     <div className="profile-page">
@@ -78,34 +98,45 @@ export default function ProfilePage({ onOpenAttempt }) {
       )}
 
       {/* ---- Account (read-only + Edit) ---- */}
-      <section className="card">
-        <div className="profile-identity">
-          <div className="avatar-lg" aria-hidden="true">
-            {initials}
+      <section className="card profile-hero">
+        <div className="profile-banner" aria-hidden="true" />
+        <div className="profile-hero-body">
+          <div className="avatar-lg profile-hero-avatar" aria-hidden="true">
+            {photoData ? <img src={photoData} alt="" /> : initials}
           </div>
           <div className="profile-identity-info">
             <div className="profile-name">{displayName || 'No name set'}</div>
             <div className="muted">{email}</div>
           </div>
-          <Link to="/profile/edit" className="btn-ghost edit-profile-btn">
-            Edit
-          </Link>
+          <div className="profile-hero-actions">
+            <Link to="/profile/edit" className="btn-ghost edit-profile-btn">
+              Edit
+            </Link>
+            <button type="button" className="btn-ghost" onClick={() => signOut()}>
+              Sign out
+            </button>
+          </div>
         </div>
       </section>
 
       {/* ---- Overview ---- */}
       <section className="card">
         <h2>Overview</h2>
-        <div className="stat-grid">
-          <div className="stat">
-            <span className="stat-value">{overview?.totalQuizzes ?? 0}</span>
-            <span className="stat-label">Quizzes taken</span>
-          </div>
-          <div className="stat">
-            <span className="stat-value">
-              {overview?.totalQuizzes ? `${overview.averageScorePercent}%` : '—'}
-            </span>
+        <div className="overview-row">
+          <div className="score-ring-wrap">
+            <div className="score-ring" style={{ '--pct': avgScore }}>
+              <span>{overview?.totalQuizzes ? `${avgScore}%` : '—'}</span>
+            </div>
             <span className="stat-label">Average score</span>
+          </div>
+          <div className="stat-grid">
+            <div className="stat">
+              <span className="stat-icon" aria-hidden="true">
+                📚
+              </span>
+              <span className="stat-value">{overview?.totalQuizzes ?? 0}</span>
+              <span className="stat-label">Quizzes taken</span>
+            </div>
           </div>
         </div>
       </section>
@@ -132,7 +163,14 @@ export default function ProfilePage({ onOpenAttempt }) {
             <tbody>
               {attempts.map((a) => (
                 <tr key={a.id}>
-                  <td>{a.quizTitle || a.quizId}</td>
+                  <td>
+                    <span className="quiz-title-cell">
+                      <span className="quiz-type-icon" aria-hidden="true">
+                        {typeIcon(a.questionType)}
+                      </span>
+                      {a.quizTitle || a.quizId}
+                    </span>
+                  </td>
                   <td>{typeLabel(a.questionType)}</td>
                   <td>
                     <span className="badge">

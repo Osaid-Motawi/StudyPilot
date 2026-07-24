@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   currentUser,
@@ -6,6 +6,32 @@ import {
   changeEmail,
   changePassword,
 } from '../services/authService.js';
+import { getProfile, updateProfilePhoto } from '../services/apiClient.js';
+
+// Photos are stored as a base64 data URI directly on the Firestore user doc
+// (no Cloud Storage bucket needed). Downscale client-side first so the
+// resulting string stays well under Firestore's 1 MiB document limit.
+const MAX_PHOTO_DIMENSION = 256;
+const PHOTO_JPEG_QUALITY = 0.82;
+
+function resizeImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, MAX_PHOTO_DIMENSION / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', PHOTO_JPEG_QUALITY));
+      URL.revokeObjectURL(img.src);
+    };
+    img.onerror = () => reject(new Error('Could not read that image.'));
+    img.src = URL.createObjectURL(file);
+  });
+}
 
 // Dedicated edit screen reached from the Profile page's "Edit" button.
 // Edit display name, email (via verification link), and password.
@@ -41,6 +67,46 @@ export default function EditProfilePage() {
   const [newPw, setNewPw] = useState('');
   const [pwMsg, setPwMsg] = useState(null);
   const [busy, setBusy] = useState('');
+
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [photoMsg, setPhotoMsg] = useState(null);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+    getProfile()
+      .then((p) => active && setPhotoPreview(p?.photoData || null))
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function handlePhotoChosen(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoMsg(null);
+    try {
+      const dataUri = await resizeImageFile(file);
+      setPhotoPreview(dataUri);
+    } catch (err) {
+      setPhotoMsg({ type: 'err', text: err?.message || 'Could not read that image.' });
+    }
+  }
+
+  async function savePhoto() {
+    if (!photoPreview) return;
+    setPhotoMsg(null);
+    setBusy('photo');
+    try {
+      await updateProfilePhoto(photoPreview);
+      setPhotoMsg({ type: 'ok', text: 'Photo updated.' });
+    } catch (err) {
+      setPhotoMsg({ type: 'err', text: err?.message || 'Could not save photo.' });
+    } finally {
+      setBusy('');
+    }
+  }
 
   async function saveName(e) {
     e.preventDefault();
@@ -100,6 +166,35 @@ export default function EditProfilePage() {
         <h1>Edit profile</h1>
         <p className="subtitle">Update your name, email, and password.</p>
       </header>
+
+      <section className="card">
+        <h2>Profile photo</h2>
+        <div className="photo-editor">
+          <div className="photo-preview" aria-hidden="true">
+            {photoPreview ? (
+              <img src={photoPreview} alt="" />
+            ) : (
+              (currentUser()?.displayName || currentUser()?.email || '?')
+                .trim()
+                .charAt(0)
+                .toUpperCase()
+            )}
+          </div>
+          <div className="photo-editor-actions">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              aria-label="Profile photo"
+              onChange={handlePhotoChosen}
+            />
+            <button type="button" onClick={savePhoto} disabled={!photoPreview || busy === 'photo'}>
+              {busy === 'photo' ? 'Saving…' : 'Save photo'}
+            </button>
+            <Note msg={photoMsg} />
+          </div>
+        </div>
+      </section>
 
       <section className="card">
         <h2>Display name</h2>

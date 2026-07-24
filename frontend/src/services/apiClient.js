@@ -113,6 +113,16 @@ export function getProfileOverview() {
   return request('/profile/overview');
 }
 
+// GET /api/profile -> { photoData }
+export function getProfile() {
+  return request('/profile');
+}
+
+// POST /api/profile/photo -> { photoData }
+export function updateProfilePhoto(photoData) {
+  return request('/profile/photo', { method: 'POST', body: { photoData } });
+}
+
 // ---- General AI Chat (Part 3 — used by later phases) ----------------------
 
 // POST /api/chats -> { id, title, messages }

@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 // Auth is mocked so the page reads a fake signed-in user (no real Firebase).
 vi.mock('../src/services/authService.js', () => ({
   currentUser: () => ({ displayName: 'Osaid Motawi', email: 'osaid@example.com' }),
+  signOut: vi.fn(),
 }));
 
 // US2: the Profile page shows the overview stats and a per-quiz list. apiClient
@@ -38,6 +39,7 @@ vi.mock('../src/services/apiClient.js', () => ({
     ],
   }),
   getAttempt: vi.fn(),
+  getProfile: vi.fn().mockResolvedValue({ photoData: null }),
 }));
 
 import ProfilePage from '../src/pages/ProfilePage.jsx';

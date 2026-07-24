@@ -18,6 +18,7 @@ export default function ChatPage() {
   const [chats, setChats] = useState([]);
   const [active, setActive] = useState(BLANK); // ready to type immediately
   const [listError, setListError] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
 
   async function refreshChats() {
     try {
@@ -34,6 +35,7 @@ export default function ChatPage() {
 
   async function openChat(id) {
     setListError('');
+    setSidebarOpen(false);
     try {
       const chat = await getChat(id);
       setActive({ id: chat.id, title: chat.title, messages: chat.messages || [] });
@@ -44,6 +46,7 @@ export default function ChatPage() {
 
   function startNewChat() {
     setActive({ ...BLANK });
+    setSidebarOpen(false);
   }
 
   // Wired into ChatThread; rethrows so the composer preserves the message/file.
@@ -65,7 +68,15 @@ export default function ChatPage() {
 
   return (
     <div className="chat-fullscreen">
-      <aside className="chat-sidebar">
+      {sidebarOpen && (
+        <div
+          className="chat-sidebar-backdrop"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside className={`chat-sidebar${sidebarOpen ? ' open' : ''}`}>
         <button type="button" className="btn-block new-chat-btn" onClick={startNewChat}>
           + New chat
         </button>
@@ -94,6 +105,16 @@ export default function ChatPage() {
       </aside>
 
       <section className="chat-main">
+        <div className="chat-mobile-bar">
+          <button
+            type="button"
+            className="chat-sidebar-toggle"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Show conversations"
+          >
+            ☰ Chats
+          </button>
+        </div>
         <ChatThread
           key={active?.id || 'new'}
           messages={active.messages}

@@ -84,3 +84,43 @@ describe('US2: Profile overview + list', () => {
     expect(mine.body.totalQuizzes).toBe(2);
   });
 });
+
+describe('Profile photo', () => {
+  const PHOTO = 'data:image/jpeg;base64,AAAA';
+
+  test('GET /api/profile -> photoData null before anything is saved', async () => {
+    const res = await auth(request(app).get('/api/profile'));
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ photoData: null });
+  });
+
+  test('POST /api/profile/photo saves it, GET /api/profile returns it back', async () => {
+    const saved = await auth(request(app).post('/api/profile/photo')).send({ photoData: PHOTO });
+    expect(saved.status).toBe(200);
+    expect(saved.body).toEqual({ photoData: PHOTO });
+
+    const fetched = await auth(request(app).get('/api/profile'));
+    expect(fetched.body).toEqual({ photoData: PHOTO });
+  });
+
+  test('rejects a non-data-URI payload', async () => {
+    const res = await auth(request(app).post('/api/profile/photo')).send({
+      photoData: 'not-an-image',
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('invalid_photo');
+  });
+
+  test('rejects an oversized payload', async () => {
+    const huge = 'data:image/jpeg;base64,' + 'A'.repeat(800_000);
+    const res = await auth(request(app).post('/api/profile/photo')).send({ photoData: huge });
+    expect(res.status).toBe(400);
+  });
+
+  test('cross-user isolation: each user only sees their own photo', async () => {
+    await auth(request(app).post('/api/profile/photo'), 'userA').send({ photoData: PHOTO });
+
+    const other = await auth(request(app).get('/api/profile'), 'userB');
+    expect(other.body).toEqual({ photoData: null });
+  });
+});

@@ -2,8 +2,16 @@
 
 const { getDb } = require('../clients/firestoreClient');
 
+// Firestore documents cap out at 1 MiB; leave generous headroom under that
+// for the base64 string (encoded size is ~4/3 of the original file).
+const MAX_PHOTO_LENGTH = 700_000;
+
 function attemptsCol(uid) {
   return getDb().collection('users').doc(uid).collection('attempts');
+}
+
+function userDoc(uid) {
+  return getDb().collection('users').doc(uid);
 }
 
 /**
@@ -30,4 +38,37 @@ async function getOverview({ uid }) {
   return { averageScorePercent, totalQuizzes };
 }
 
-module.exports = { getOverview };
+/**
+ * Returns the user's stored profile photo, or null if none has been set.
+ *
+ * @param {object} args
+ * @param {string} args.uid
+ * @returns {Promise<{photoData: string|null}>}
+ */
+async function getPhoto({ uid }) {
+  const snap = await userDoc(uid).get();
+  const data = snap.exists ? snap.data() || {} : {};
+  return { photoData: data.photoData || null };
+}
+
+/**
+ * Saves the user's profile photo as a base64 data-URI string directly on the
+ * `users/{uid}` document (no Cloud Storage — kept simple per product decision).
+ *
+ * @param {object} args
+ * @param {string} args.uid
+ * @param {string} args.photoData - data URI, e.g. "data:image/jpeg;base64,...."
+ * @returns {Promise<{photoData: string}>}
+ */
+async function savePhoto({ uid, photoData }) {
+  if (typeof photoData !== 'string' || !photoData.startsWith('data:image/')) {
+    throw new Error('photoData must be an image data URI');
+  }
+  if (photoData.length > MAX_PHOTO_LENGTH) {
+    throw new Error('photoData exceeds the maximum allowed size');
+  }
+  await userDoc(uid).set({ photoData }, { merge: true });
+  return { photoData };
+}
+
+module.exports = { getOverview, getPhoto, savePhoto, MAX_PHOTO_LENGTH };

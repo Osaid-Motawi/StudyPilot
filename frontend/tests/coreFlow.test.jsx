@@ -73,6 +73,7 @@ vi.mock('../src/services/apiClient.js', () => {
     submitAttempt: vi.fn().mockResolvedValue(result),
     listAttempts: vi.fn().mockResolvedValue({ attempts: [] }),
     getAttempt: vi.fn().mockResolvedValue(result),
+    getProfile: vi.fn().mockResolvedValue({ photoData: null }),
   };
 });
 

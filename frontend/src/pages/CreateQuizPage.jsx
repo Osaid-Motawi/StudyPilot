@@ -4,11 +4,13 @@ import { createQuizFromText, createQuizFromFile } from '../services/apiClient.js
 // Create a quiz from pasted notes or an uploaded PDF/.txt. Pick a single question
 // type + how many questions. Preserves input and offers a retry on failure.
 const QUESTION_TYPES = [
-  { value: 'mcq', label: 'Multiple-choice', desc: 'Pick the correct option' },
-  { value: 'fill_blank', label: 'Fill-in-the-blank', desc: 'Complete the missing word' },
-  { value: 'essay', label: 'Essay', desc: 'Write a free-response answer' },
-  { value: 'matching', label: 'Matching', desc: 'Match items across two columns' },
+  { value: 'mcq', label: 'Multiple-choice', desc: 'Pick the correct option', icon: '🔘' },
+  { value: 'fill_blank', label: 'Fill-in-the-blank', desc: 'Complete the missing word', icon: '✏️' },
+  { value: 'essay', label: 'Essay', desc: 'Write a free-response answer', icon: '📝' },
+  { value: 'matching', label: 'Matching', desc: 'Match items across two columns', icon: '🔗' },
 ];
+
+const TYPE_LABELS = Object.fromEntries(QUESTION_TYPES.map((t) => [t.value, t.label]));
 
 const COUNT_PRESETS = [5, 10, 20, 50];
 const MIN_QUESTIONS = 1;
@@ -67,6 +69,8 @@ export default function CreateQuizPage({ onQuizCreated }) {
     generate();
   }
 
+  const activeType = QUESTION_TYPES.find((qt) => qt.value === questionType);
+
   return (
     <div className="create-quiz-page">
       <header className="page-header">
@@ -76,133 +80,163 @@ export default function CreateQuizPage({ onQuizCreated }) {
         </p>
       </header>
 
-      <form className="card create-form" onSubmit={handleSubmit}>
-        {/* 1. Question type */}
-        <div className="form-section">
-          <div className="section-label">Question type</div>
-          <div className="type-grid" role="tablist" aria-label="Question type">
-            {QUESTION_TYPES.map((qt) => (
-              <button
-                key={qt.value}
-                type="button"
-                role="tab"
-                aria-label={qt.label}
-                aria-selected={questionType === qt.value}
-                className={`type-card${questionType === qt.value ? ' active' : ''}`}
-                onClick={() => setQuestionType(qt.value)}
-              >
-                <span className="type-title">{qt.label}</span>
-                <span className="type-desc">{qt.desc}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* 2. Number of questions */}
-        <div className="form-section">
-          <div className="section-label">Number of questions</div>
-          <div className="num-questions">
-            <div className="mode-toggle" role="group" aria-label="Number of questions presets">
-              {COUNT_PRESETS.map((n) => (
+      <form className="create-layout" onSubmit={handleSubmit}>
+        <div className="create-main">
+          {/* 1. Question type */}
+          <div className="card form-section">
+            <div className="section-label">Question type</div>
+            <div className="type-grid" role="tablist" aria-label="Question type">
+              {QUESTION_TYPES.map((qt) => (
                 <button
-                  key={n}
+                  key={qt.value}
                   type="button"
-                  aria-pressed={numQuestions === n}
-                  className={numQuestions === n ? 'active' : ''}
-                  onClick={() => setNumQuestions(n)}
+                  role="tab"
+                  aria-label={qt.label}
+                  aria-selected={questionType === qt.value}
+                  className={`type-card${questionType === qt.value ? ' active' : ''}`}
+                  onClick={() => setQuestionType(qt.value)}
                 >
-                  {n}
+                  <span className="type-icon" aria-hidden="true">
+                    {qt.icon}
+                  </span>
+                  <span className="type-title">{qt.label}</span>
+                  <span className="type-desc">{qt.desc}</span>
                 </button>
               ))}
             </div>
-            <input
-              type="number"
-              className="num-input"
-              min={MIN_QUESTIONS}
-              max={MAX_QUESTIONS}
-              value={numQuestions}
-              aria-label="Number of questions"
-              onChange={(e) => setNumQuestions(e.target.value)}
-              onBlur={(e) => setNumQuestions(clampCount(e.target.value))}
-            />
-          </div>
-          {questionType === 'matching' && (
-            <p className="hint">Matching quizzes use 3–10 pairs, so the count is capped to that range.</p>
-          )}
-        </div>
-
-        {/* 3. Study material */}
-        <div className="form-section">
-          <div className="section-label">Study material</div>
-          <div className="mode-toggle" role="tablist" aria-label="Material source">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === 'paste'}
-              className={mode === 'paste' ? 'active' : ''}
-              onClick={() => setMode('paste')}
-            >
-              Paste notes
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === 'upload'}
-              className={mode === 'upload' ? 'active' : ''}
-              onClick={() => setMode('upload')}
-            >
-              Upload file
-            </button>
           </div>
 
-          <label>
-            Title (optional)
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Photosynthesis Basics"
-            />
-          </label>
-
-          {mode === 'paste' ? (
-            <label>
-              Study notes
-              <textarea
-                aria-label="Study notes"
-                rows={10}
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder="Paste or type your study notes here…"
-              />
-            </label>
-          ) : (
-            <label>
-              Document (PDF or .txt)
+          {/* 2. Number of questions */}
+          <div className="card form-section">
+            <div className="section-label">Number of questions</div>
+            <div className="num-questions">
+              <div className="mode-toggle" role="group" aria-label="Number of questions presets">
+                {COUNT_PRESETS.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    aria-pressed={numQuestions === n}
+                    className={numQuestions === n ? 'active' : ''}
+                    onClick={() => setNumQuestions(n)}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
               <input
-                type="file"
-                accept=".pdf,.txt,application/pdf,text/plain"
-                aria-label="Study document"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                type="number"
+                className="num-input"
+                min={MIN_QUESTIONS}
+                max={MAX_QUESTIONS}
+                value={numQuestions}
+                aria-label="Number of questions"
+                onChange={(e) => setNumQuestions(e.target.value)}
+                onBlur={(e) => setNumQuestions(clampCount(e.target.value))}
               />
-            </label>
-          )}
-        </div>
-
-        <button type="submit" className="btn-block" disabled={!canSubmit || busy}>
-          {busy ? 'Generating…' : 'Generate Quiz'}
-        </button>
-
-        {error && (
-          <div className="error" role="alert">
-            <p>{error.message}</p>
-            {error.retryable && (
-              <button type="button" onClick={generate} disabled={busy}>
-                Retry
-              </button>
+            </div>
+            {questionType === 'matching' && (
+              <p className="hint">Matching quizzes use 3–10 pairs, so the count is capped to that range.</p>
             )}
           </div>
-        )}
+
+          {/* 3. Study material */}
+          <div className="card form-section">
+            <div className="section-label">Study material</div>
+            <div className="mode-toggle" role="tablist" aria-label="Material source">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === 'paste'}
+                className={mode === 'paste' ? 'active' : ''}
+                onClick={() => setMode('paste')}
+              >
+                Paste notes
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === 'upload'}
+                className={mode === 'upload' ? 'active' : ''}
+                onClick={() => setMode('upload')}
+              >
+                Upload file
+              </button>
+            </div>
+
+            <label>
+              Title (optional)
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Photosynthesis Basics"
+              />
+            </label>
+
+            {mode === 'paste' ? (
+              <label>
+                Study notes
+                <textarea
+                  aria-label="Study notes"
+                  rows={10}
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder="Paste or type your study notes here…"
+                />
+              </label>
+            ) : (
+              <label>
+                Document (PDF or .txt)
+                <input
+                  type="file"
+                  accept=".pdf,.txt,application/pdf,text/plain"
+                  aria-label="Study document"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                />
+              </label>
+            )}
+          </div>
+        </div>
+
+        {/* Sticky summary + generate action */}
+        <aside className="create-summary card">
+          <div className="section-label">Summary</div>
+          <ul className="summary-list">
+            <li>
+              <span className="summary-icon" aria-hidden="true">
+                {activeType.icon}
+              </span>
+              <span>{TYPE_LABELS[questionType]}</span>
+            </li>
+            <li>
+              <span className="summary-icon" aria-hidden="true">
+                #
+              </span>
+              <span>{clampCount(numQuestions)} questions</span>
+            </li>
+            <li>
+              <span className="summary-icon" aria-hidden="true">
+                {mode === 'paste' ? '📋' : '📄'}
+              </span>
+              <span>{mode === 'paste' ? 'Pasted notes' : file?.name || 'No file chosen'}</span>
+            </li>
+          </ul>
+
+          <button type="submit" className="btn-block" disabled={!canSubmit || busy}>
+            {busy ? 'Generating…' : 'Generate Quiz'}
+          </button>
+
+          {error && (
+            <div className="error" role="alert">
+              <p>{error.message}</p>
+              {error.retryable && (
+                <button type="button" onClick={generate} disabled={busy}>
+                  Retry
+                </button>
+              )}
+            </div>
+          )}
+        </aside>
       </form>
     </div>
   );
