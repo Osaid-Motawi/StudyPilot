@@ -40,7 +40,9 @@ from models import (
 # Load agent/.env (ASI_ONE_API_KEY, ASI_ONE_BASE_URL, ASI_ONE_MODEL, AGENT_PORT).
 load_dotenv(Path(__file__).parent / ".env")
 
-AGENT_PORT = int(os.environ.get("AGENT_PORT", "8001"))
+# Render assigns the listen port dynamically via PORT; AGENT_PORT is the
+# local-dev override, and 8001 is the default when neither is set.
+AGENT_PORT = int(os.environ.get("PORT", os.environ.get("AGENT_PORT", "8001")))
 
 VALID_QUESTION_TYPES = {"mcq", "fill_blank", "essay", "matching"}
 MATCHING_MIN_PAIRS = 3
