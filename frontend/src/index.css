@@ -169,7 +169,7 @@ body {
   transition: background-color 0.15s ease;
 }
 
-::placeholder {
+:where(.classic-root) ::placeholder {
   color: var(--muted);
   opacity: 0.75;
 }
@@ -182,14 +182,14 @@ body {
 
 /* ---- Typography ---------------------------------------------------------- */
 
-h1 {
+:where(.classic-root) h1 {
   font-size: 1.9rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   margin: 0 0 0.25rem;
 }
 
-h2 {
+:where(.classic-root) h2 {
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -460,7 +460,7 @@ h2 {
 
 /* ---- Buttons ------------------------------------------------------------- */
 
-button {
+:where(.classic-root) button {
   background: var(--brand-grad);
   color: #fff;
   border: none;
@@ -473,17 +473,17 @@ button {
   box-shadow: 0 6px 16px -8px rgba(99, 102, 241, 0.7);
 }
 
-button:hover:not(:disabled) {
+:where(.classic-root) button:hover:not(:disabled) {
   filter: brightness(1.05);
   transform: translateY(-1px);
   box-shadow: 0 10px 22px -8px rgba(99, 102, 241, 0.75);
 }
 
-button:active:not(:disabled) {
+:where(.classic-root) button:active:not(:disabled) {
   transform: translateY(0);
 }
 
-button:disabled {
+:where(.classic-root) button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
   box-shadow: none;
@@ -523,19 +523,19 @@ button.link:hover:not(:disabled) {
 
 /* ---- Forms --------------------------------------------------------------- */
 
-label {
+:where(.classic-root) label {
   display: block;
   margin: 0.9rem 0;
   font-weight: 600;
   font-size: 0.92rem;
 }
 
-input[type='text'],
-input[type='email'],
-input[type='password'],
-input[type='number'],
-input[type='file'],
-textarea {
+:where(.classic-root) input[type='text'],
+:where(.classic-root) input[type='email'],
+:where(.classic-root) input[type='password'],
+:where(.classic-root) input[type='number'],
+:where(.classic-root) input[type='file'],
+:where(.classic-root) textarea {
   display: block;
   width: 100%;
   margin-top: 0.4rem;
@@ -549,22 +549,22 @@ textarea {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-input[type='text']:focus,
-input[type='email']:focus,
-input[type='password']:focus,
-input[type='number']:focus,
-textarea:focus {
+:where(.classic-root) input[type='text']:focus,
+:where(.classic-root) input[type='email']:focus,
+:where(.classic-root) input[type='password']:focus,
+:where(.classic-root) input[type='number']:focus,
+:where(.classic-root) textarea:focus {
   outline: none;
   border-color: var(--brand);
   box-shadow: var(--ring);
 }
 
-textarea {
+:where(.classic-root) textarea {
   resize: vertical;
   min-height: 8rem;
 }
 
-input[type='file'] {
+:where(.classic-root) input[type='file'] {
   padding: 0.6rem;
   cursor: pointer;
 }
@@ -1093,7 +1093,7 @@ input[type='file'] {
   color: var(--muted);
 }
 
-section {
+:where(.classic-root) section {
   margin-top: 1.5rem;
 }
 

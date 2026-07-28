@@ -1,74 +1,31 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { LogOut } from 'lucide-react';
 import {
-  getProfileOverview,
-  listAttempts,
-  getAttempt,
-  getProfile,
-} from '../services/apiClient.js';
-import { currentUser, signOut } from '../services/authService.js';
+  useProfileData,
+  TYPE_LABELS,
+  TYPE_ICONS,
+} from '../hooks/useProfileData.js';
+import { signOut } from '../services/authService.js';
 
 // Profile: read-only account summary (name + email, with an Edit button that
 // routes to /profile/edit), performance overview, and full quiz history.
-const TYPE_LABELS = {
-  mcq: 'Multiple-choice',
-  fill_blank: 'Fill-in-the-blank',
-  essay: 'Essay',
-  matching: 'Matching',
-};
-
-const TYPE_ICONS = {
-  mcq: '🔘',
-  fill_blank: '✏️',
-  essay: '📝',
-  matching: '🔗',
-};
-
+// Data + attempt loading live in the shared useProfileData hook (also used by
+// the MUI design); this file is only the Classic presentation.
 export default function ProfilePage({ onOpenAttempt }) {
-  const [overview, setOverview] = useState(null);
-  const [attempts, setAttempts] = useState([]);
-  const [photoData, setPhotoData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  const user = currentUser();
-  const displayName = user?.displayName || '';
-  const email = user?.email || '';
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const [ov, at, profile] = await Promise.all([
-          getProfileOverview(),
-          listAttempts(),
-          getProfile().catch(() => null),
-        ]);
-        if (!active) return;
-        setOverview(ov || { averageScorePercent: 0, totalQuizzes: 0 });
-        setAttempts(at?.attempts || []);
-        setPhotoData(profile?.photoData || null);
-      } catch (err) {
-        if (active) setError(err?.message || 'Could not load your profile.');
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
+  const {
+    overview,
+    attempts,
+    photoData,
+    loading,
+    error,
+    displayName,
+    email,
+    openAttempt: loadAttempt,
+  } = useProfileData();
 
   async function openAttempt(attemptId) {
-    setError('');
-    try {
-      const full = await getAttempt(attemptId);
-      onOpenAttempt(full);
-    } catch (err) {
-      setError(err?.message || 'Could not open that quiz for review.');
-    }
+    const full = await loadAttempt(attemptId);
+    if (full) onOpenAttempt(full);
   }
 
   function fmt(ts) {
@@ -113,6 +70,7 @@ export default function ProfilePage({ onOpenAttempt }) {
               Edit
             </Link>
             <button type="button" className="btn-ghost" onClick={() => signOut()}>
+              <LogOut size={15} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: '0.4rem' }} />
               Sign out
             </button>
           </div>
