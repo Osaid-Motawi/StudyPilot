@@ -1,70 +1,23 @@
-import { useEffect, useState } from 'react';
-import {
-  listChats,
-  getChat,
-  createChat,
-  sendChatMessage,
-  analyzeUpload,
-} from '../services/apiClient.js';
+import { Menu } from 'lucide-react';
+import { useChatData } from '../hooks/useChatData.js';
 import ChatThread from '../components/ChatThread.jsx';
 
 // General AI Chat — ChatGPT/Claude style. Opens straight into a ready, empty
 // chat (composer focused); a sidebar lists persisted conversations to switch to
 // or start a new one. The chat is created on the backend when the first message
-// is sent.
-const BLANK = { id: null, title: 'New chat', messages: [] };
-
+// is sent. All conversation logic lives in the shared useChatData hook (also
+// used by the MUI design); this file is only the Classic presentation.
 export default function ChatPage() {
-  const [chats, setChats] = useState([]);
-  const [active, setActive] = useState(BLANK); // ready to type immediately
-  const [listError, setListError] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
-
-  async function refreshChats() {
-    try {
-      const res = await listChats();
-      setChats(res?.chats || []);
-    } catch (err) {
-      setListError(err?.message || 'Could not load your chats.');
-    }
-  }
-
-  useEffect(() => {
-    refreshChats();
-  }, []);
-
-  async function openChat(id) {
-    setListError('');
-    setSidebarOpen(false);
-    try {
-      const chat = await getChat(id);
-      setActive({ id: chat.id, title: chat.title, messages: chat.messages || [] });
-    } catch (err) {
-      setListError(err?.message || 'Could not open that chat.');
-    }
-  }
-
-  function startNewChat() {
-    setActive({ ...BLANK });
-    setSidebarOpen(false);
-  }
-
-  // Wired into ChatThread; rethrows so the composer preserves the message/file.
-  async function handleSend(text, file) {
-    if (file) {
-      // Attaching a PDF/.txt starts a new chat grounded in that file's content.
-      const res = await analyzeUpload(file, { question: text });
-      const chat = await getChat(res.chatId);
-      setActive({ id: chat.id, title: chat.title, messages: chat.messages || [] });
-      refreshChats();
-      return;
-    }
-    const res = active?.id
-      ? await sendChatMessage(active.id, { message: text })
-      : await createChat({ message: text });
-    setActive({ id: res.id, title: res.title, messages: res.messages || [] });
-    refreshChats();
-  }
+  const {
+    chats,
+    active,
+    listError,
+    sidebarOpen,
+    setSidebarOpen,
+    openChat,
+    startNewChat,
+    handleSend,
+  } = useChatData();
 
   return (
     <div className="chat-fullscreen">
@@ -112,7 +65,8 @@ export default function ChatPage() {
             onClick={() => setSidebarOpen(true)}
             aria-label="Show conversations"
           >
-            ☰ Chats
+            <Menu size={16} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: '0.4rem' }} />
+            Chats
           </button>
         </div>
         <ChatThread

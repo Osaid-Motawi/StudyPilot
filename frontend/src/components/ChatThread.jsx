@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { Plus, X, Paperclip } from 'lucide-react';
 
 // Reusable conversation view: a scrolling message list + a composer.
 // Used by the general AI Chat and the analysis chat.
@@ -86,7 +87,10 @@ export default function ChatThread({
     <div className="chat-composer-box">
       {file && (
         <div className="chat-attachment">
-          <span className="chat-attachment-name">📎 {file.name}</span>
+          <span className="chat-attachment-name">
+            <Paperclip size={14} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: '0.35rem' }} />
+            {file.name}
+          </span>
           <button
             type="button"
             className="chat-attachment-remove"
@@ -96,7 +100,7 @@ export default function ChatThread({
               if (fileRef.current) fileRef.current.value = '';
             }}
           >
-            ✕
+            <X size={13} aria-hidden="true" />
           </button>
         </div>
       )}
@@ -127,7 +131,7 @@ export default function ChatThread({
             onClick={() => fileRef.current?.click()}
             disabled={disabled || busy}
           >
-            +
+            <Plus size={22} aria-hidden="true" />
           </button>
           <button type="submit" disabled={disabled || busy || !draft.trim()}>
             {busy ? '…' : 'Send'}

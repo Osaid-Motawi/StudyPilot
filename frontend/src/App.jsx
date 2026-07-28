@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -8,8 +8,13 @@ import {
   useNavigate,
   useParams,
 } from 'react-router-dom';
+import { ThemeProvider, CssBaseline } from '@mui/material';
+import { Moon, Sun, Palette, Menu, X, LayoutGrid } from 'lucide-react';
 import { onAuthChanged } from './services/authService.js';
 import { getQuiz, submitAttempt, getProfile } from './services/apiClient.js';
+import { DesignProvider, useDesign } from './design/DesignContext.jsx';
+import { buildMuiTheme } from './design/muiTheme.js';
+import MuiLayout from './mui/MuiLayout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import CreateQuizPage from './pages/CreateQuizPage.jsx';
 import ChatPage from './pages/ChatPage.jsx';
@@ -19,13 +24,22 @@ import FocusTimerPage from './pages/FocusTimerPage.jsx';
 import ToolsPage from './pages/ToolsPage.jsx';
 import QuizTaker from './components/QuizTaker.jsx';
 import QuizResults from './components/QuizResults.jsx';
+import MuiCreateQuizPage from './mui/MuiCreateQuizPage.jsx';
+import MuiChatPage from './mui/MuiChatPage.jsx';
+import MuiProfilePage from './mui/MuiProfilePage.jsx';
+import MuiFocusTimerPage from './mui/MuiFocusTimerPage.jsx';
+import MuiToolsPage from './mui/MuiToolsPage.jsx';
+import MuiQuizTaker from './mui/MuiQuizTaker.jsx';
+import MuiQuizResults from './mui/MuiQuizResults.jsx';
 
-// ---- Route wrappers (bridge shared in-memory state <-> router) ------------
+// ---- Route wrappers (bridge shared in-memory state <-> router). Each picks
+// the Classic or MUI variant of its page from the active design. ------------
 
-function CreateRoute({ setQuiz }) {
+function CreateRoute({ design, setQuiz }) {
   const navigate = useNavigate();
+  const Page = design === 'mui' ? MuiCreateQuizPage : CreateQuizPage;
   return (
-    <CreateQuizPage
+    <Page
       onQuizCreated={(quiz) => {
         setQuiz(quiz);
         navigate(`/quiz/${quiz.id}`);
@@ -34,12 +48,13 @@ function CreateRoute({ setQuiz }) {
   );
 }
 
-function TakeRoute({ quiz, setQuiz, setResult }) {
+function TakeRoute({ design, quiz, setQuiz, setResult }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(!quiz || quiz.id !== id);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const Taker = design === 'mui' ? MuiQuizTaker : QuizTaker;
 
   useEffect(() => {
     let active = true;
@@ -80,21 +95,21 @@ function TakeRoute({ quiz, setQuiz, setResult }) {
   if (error) return <p className="error" role="alert">{error}</p>;
   if (!quiz) return <p>Quiz not found.</p>;
 
-  return (
-    <QuizTaker quiz={quiz} onSubmit={handleSubmit} submitting={submitting} />
-  );
+  return <Taker quiz={quiz} onSubmit={handleSubmit} submitting={submitting} />;
 }
 
-function ResultsRoute({ result }) {
+function ResultsRoute({ design, result }) {
   const navigate = useNavigate();
+  const Results = design === 'mui' ? MuiQuizResults : QuizResults;
   if (!result) return <Navigate to="/" replace />;
-  return <QuizResults result={result} onBack={() => navigate('/profile')} />;
+  return <Results result={result} onBack={() => navigate('/profile')} />;
 }
 
-function ProfileRoute({ setResult }) {
+function ProfileRoute({ design, setResult }) {
   const navigate = useNavigate();
+  const Page = design === 'mui' ? MuiProfilePage : ProfilePage;
   return (
-    <ProfilePage
+    <Page
       onOpenAttempt={(r) => {
         setResult(r);
         navigate('/results');
@@ -110,6 +125,8 @@ function RequireAuth({ user, children }) {
   return children;
 }
 
+// ---- Classic chrome toggles (lucide-react icons for a polished look) ------
+
 function ThemeToggle({ theme, onToggle, floating }) {
   const isDark = theme === 'dark';
   return (
@@ -120,7 +137,7 @@ function ThemeToggle({ theme, onToggle, floating }) {
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
       title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
-      {isDark ? '☀️' : '🌙'}
+      {isDark ? <Sun size={18} aria-hidden="true" /> : <Moon size={18} aria-hidden="true" />}
     </button>
   );
 }
@@ -143,7 +160,24 @@ function PaletteToggle({ palette, onToggle }) {
       aria-label={`Color theme: ${PALETTE_LABELS[palette]}. Click to try ${PALETTE_LABELS[nextPalette]}.`}
       title={`Color theme: ${PALETTE_LABELS[palette]} (click to try another)`}
     >
-      🎨
+      <Palette size={18} aria-hidden="true" />
+    </button>
+  );
+}
+
+// Classic <-> MUI switcher. Distinct icon from the palette control so the two
+// never collide; here it flips the signed-in user into the MUI design.
+function DesignToggle() {
+  const { design, toggleDesign } = useDesign();
+  return (
+    <button
+      type="button"
+      className="theme-toggle"
+      onClick={toggleDesign}
+      aria-label="Switch to MUI design"
+      title={design === 'mui' ? 'Switch to Classic design' : 'Switch to MUI (Material) design'}
+    >
+      <LayoutGrid size={18} aria-hidden="true" />
     </button>
   );
 }
@@ -161,7 +195,6 @@ function Nav({ user, theme, onToggleTheme, palette, onTogglePalette, photoData }
         </span>
         <span className="brand-name">StudyPilot</span>
       </Link>
-      <PaletteToggle palette={palette} onToggle={onTogglePalette} />
       <button
         type="button"
         className="nav-menu-toggle"
@@ -169,7 +202,7 @@ function Nav({ user, theme, onToggleTheme, palette, onTogglePalette, photoData }
         aria-label={menuOpen ? 'Close menu' : 'Open menu'}
         aria-expanded={menuOpen}
       >
-        {menuOpen ? '✕' : '☰'}
+        {menuOpen ? <X size={18} aria-hidden="true" /> : <Menu size={18} aria-hidden="true" />}
       </button>
       <span className="spacer" />
       <span className={menuOpen ? 'nav-links open' : 'nav-links'}>
@@ -186,7 +219,12 @@ function Nav({ user, theme, onToggleTheme, palette, onTogglePalette, photoData }
           Tools
         </Link>
       </span>
-      <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+      {/* All appearance/design controls grouped together on the right. */}
+      <span className="appearance-toggles">
+        <PaletteToggle palette={palette} onToggle={onTogglePalette} />
+        <DesignToggle />
+        <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+      </span>
       <Link
         to="/profile"
         className="nav-avatar"
@@ -209,6 +247,152 @@ function getInitialTheme() {
   const stored = localStorage.getItem('studypilot-theme');
   if (stored === 'light' || stored === 'dark') return stored;
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+// The routed pages are identical across designs; only the chosen page variant
+// differs (handled inside the route wrappers). Defined once and reused by both
+// the Classic and MUI chrome branches.
+function AppRoutes({ design, user, quiz, setQuiz, result, setResult }) {
+  return (
+    <Routes>
+      <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+      <Route
+        path="/"
+        element={
+          <RequireAuth user={user}>
+            <CreateRoute design={design} setQuiz={setQuiz} />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/quiz/:id"
+        element={
+          <RequireAuth user={user}>
+            <TakeRoute design={design} quiz={quiz} setQuiz={setQuiz} setResult={setResult} />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/results"
+        element={
+          <RequireAuth user={user}>
+            <ResultsRoute design={design} result={result} />
+          </RequireAuth>
+        }
+      />
+      {/* Legacy History page retired — redirect to the Profile page. */}
+      <Route path="/history" element={<Navigate to="/profile" replace />} />
+      <Route
+        path="/focus"
+        element={
+          <RequireAuth user={user}>
+            {design === 'mui' ? <MuiFocusTimerPage /> : <FocusTimerPage />}
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/tools"
+        element={
+          <RequireAuth user={user}>
+            {design === 'mui' ? <MuiToolsPage /> : <ToolsPage />}
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/chat"
+        element={
+          <RequireAuth user={user}>
+            {design === 'mui' ? <MuiChatPage /> : <ChatPage />}
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <RequireAuth user={user}>
+            <ProfileRoute design={design} setResult={setResult} />
+          </RequireAuth>
+        }
+      />
+      {/* Edit Profile is a secondary page; the Classic form is reused in both
+          designs. In MUI mode it is wrapped in .classic-root so its element
+          styling still resolves inside the MUI tree. */}
+      <Route
+        path="/profile/edit"
+        element={
+          <RequireAuth user={user}>
+            {design === 'mui' ? (
+              <div className="classic-root">
+                <EditProfilePage />
+              </div>
+            ) : (
+              <EditProfilePage />
+            )}
+          </RequireAuth>
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
+// Chooses Classic vs MUI chrome for the signed-in experience. Signed-out users
+// (and the login page) always use Classic — the design switcher only appears
+// once authenticated.
+function AppShell({ user, quiz, setQuiz, result, setResult, theme, toggleTheme, palette, togglePalette, navPhotoData }) {
+  const { design } = useDesign();
+  const muiTheme = useMemo(() => buildMuiTheme(theme, palette), [theme, palette]);
+  const routes = (
+    <AppRoutes
+      design={design}
+      user={user}
+      quiz={quiz}
+      setQuiz={setQuiz}
+      result={result}
+      setResult={setResult}
+    />
+  );
+
+  if (design === 'mui' && user) {
+    return (
+      <ThemeProvider theme={muiTheme}>
+        <CssBaseline />
+        <MuiLayout
+          user={user}
+          photoData={navPhotoData}
+          mode={theme}
+          onToggleTheme={toggleTheme}
+          palette={palette}
+          onTogglePalette={togglePalette}
+        >
+          {routes}
+        </MuiLayout>
+      </ThemeProvider>
+    );
+  }
+
+  // .classic-root scopes the original global element styles (button/input/etc.
+  // in index.css) so they never bleed into the MUI subtree, which is rendered
+  // outside this wrapper.
+  return (
+    <div className="classic-root">
+      <Nav
+        user={user}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        palette={palette}
+        onTogglePalette={togglePalette}
+        photoData={navPhotoData}
+      />
+      {!user && (
+        <span className="appearance-toggles appearance-toggles-floating">
+          <PaletteToggle palette={palette} onToggle={togglePalette} />
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+        </span>
+      )}
+      <main className="container">{routes}</main>
+    </div>
+  );
 }
 
 export default function App() {
@@ -264,95 +448,20 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Nav
-        user={user}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        palette={palette}
-        onTogglePalette={togglePalette}
-        photoData={navPhotoData}
-      />
-      {!user && (
-        <span className="appearance-toggles appearance-toggles-floating">
-          <PaletteToggle palette={palette} onToggle={togglePalette} />
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-        </span>
-      )}
-      <main className="container">
-        <Routes>
-          <Route
-            path="/login"
-            element={user ? <Navigate to="/" replace /> : <LoginPage />}
-          />
-          <Route
-            path="/"
-            element={
-              <RequireAuth user={user}>
-                <CreateRoute setQuiz={setQuiz} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/quiz/:id"
-            element={
-              <RequireAuth user={user}>
-                <TakeRoute quiz={quiz} setQuiz={setQuiz} setResult={setResult} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/results"
-            element={
-              <RequireAuth user={user}>
-                <ResultsRoute result={result} />
-              </RequireAuth>
-            }
-          />
-          {/* Legacy History page retired — redirect to the Profile page. */}
-          <Route path="/history" element={<Navigate to="/profile" replace />} />
-          <Route
-            path="/focus"
-            element={
-              <RequireAuth user={user}>
-                <FocusTimerPage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/tools"
-            element={
-              <RequireAuth user={user}>
-                <ToolsPage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/chat"
-            element={
-              <RequireAuth user={user}>
-                <ChatPage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/profile"
-            element={
-              <RequireAuth user={user}>
-                <ProfileRoute setResult={setResult} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/profile/edit"
-            element={
-              <RequireAuth user={user}>
-                <EditProfilePage />
-              </RequireAuth>
-            }
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
+      <DesignProvider uid={user?.uid}>
+        <AppShell
+          user={user}
+          quiz={quiz}
+          setQuiz={setQuiz}
+          result={result}
+          setResult={setResult}
+          theme={theme}
+          toggleTheme={toggleTheme}
+          palette={palette}
+          togglePalette={togglePalette}
+          navPhotoData={navPhotoData}
+        />
+      </DesignProvider>
     </BrowserRouter>
   );
 }
