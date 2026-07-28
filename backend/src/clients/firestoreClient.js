@@ -30,8 +30,16 @@ function init() {
   // eslint-disable-next-line global-require
   const admin = require('firebase-admin');
   if (!admin.apps.length) {
+    // On Render (and other hosts without a local filesystem secret), the
+    // service account is injected as a JSON env var instead of a file path.
+    // Locally, GOOGLE_APPLICATION_CREDENTIALS -> ./serviceAccount.json still
+    // works via applicationDefault().
+    const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    const credential = serviceAccountKey
+      ? admin.credential.cert(JSON.parse(serviceAccountKey))
+      : admin.credential.applicationDefault();
     admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
+      credential,
       projectId: process.env.FIREBASE_PROJECT_ID,
     });
   }
